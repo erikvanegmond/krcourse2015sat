@@ -1,10 +1,10 @@
-# import argparse
 import random
 import csv
 import os
 import pycosat
 from pprint import pformat
 from pprint import pprint
+import time
 
 
 
@@ -12,7 +12,10 @@ from pprint import pprint
 
 #
 qqgencmd = 'qqwing --stats --timer --csv --solution --count-solutions --generate %s'
-qqgencmd = 'qqwing --stats --csv --solution --count-solutions --generate %s'
+qqgencmd = 'qqwing --stats --csv --solution --count-solutions --generate  %s'
+
+baseClauses = []
+difficultyDict = {"Simple":1,"Easy":2, "Intermediate":3, "Expert":4}
 
 
 # ./qqwing --generate 100 --stats --timer --csv
@@ -143,7 +146,7 @@ class Sudoku(object):
 
     def givens_to_dimacs_list(self):
         grid = [list(self.givens[i:i+9]) for i in range(0,81,9)]
-        clauses = []#sudoku_clauses()
+        clauses = []
         for i in range(1, 10):
             for j in range(1, 10):
                 d = grid[i - 1][j - 1]
@@ -170,6 +173,23 @@ class Sudoku(object):
                 decr -= 1
         return Sudoku(''.join(givenslist), self.solution, numgivens=newnumgivens, difficulty=self.difficulty)
 
+    def new_sudoku_all_fewer_givens(self):
+
+        givenslist = list(self.givens)
+        newnumgivens = self.numgivens - 1
+
+        lesserSudokus = []
+
+        c = 0
+        while c < 81:
+            if givenslist[c] != '.':
+                newGivenslist = list(givenslist)
+                newGivenslist[c] = '.'
+                lesserSudokus.append(Sudoku(''.join(newGivenslist), self.solution, numgivens=newnumgivens, difficulty=self.difficulty))
+            c+=1
+
+        return lesserSudokus
+
 
     def new_sudoku_more_givens(self, incr=1):
 
@@ -188,7 +208,7 @@ class Sudoku(object):
         return Sudoku(self.solution, self.solution, numgivens=81, difficulty=self.difficulty)
 
     def proper(self):
-        baseClauses = sudoku_clauses()
+        global baseClauses
         totalClauses = baseClauses + self.givens_to_dimacs_list()
 
         sol = set(pycosat.solve(totalClauses))
@@ -214,22 +234,45 @@ class Sudoku(object):
         grid = [list(self.givens[i:i+9]) for i in range(0,81,9)]
         return pformat(grid)
 
-diff = {"Simple":1,"Easy":2, "Intermediate":3, "Expert":4}
+def gatherDataFromSolution(nSudokus = 100):
+    f = open('solutionData'+str(time.time())+'.csv', 'a')
+    while True:
+        sudokus = generate_sudokus(nSudokus)
+        sudokuCounter = 0
+        for sudoku in sudokus:
+            sudokuCounter+=1
+            print sudokuCounter
+            curSudoku = sudoku.getSolution()
+            results = ""
+            for i in range(curSudoku.numgivens):
+                results += "%s,%s,%s\n" % (difficultyDict[curSudoku.difficulty], curSudoku.numgivens, curSudoku.proper())
+                curSudoku = curSudoku.new_sudoku_fewer_givens(1)
+            f.write(results)
 
-while True:
-    sudokus = generate_sudokus(100)
-    f = open('data.csv', 'a')
-    sudokuCounter = 0
-    for sudoku in sudokus:
-        sudokuCounter+=1
-        print sudokuCounter
-        curSudoku = sudoku.getSolution()
-        results = ""
-        for i in range(curSudoku.numgivens):
-            #difficulty,givens,proper
-            results += "%s,%s,%s\n" % (diff[curSudoku.difficulty], curSudoku.numgivens, curSudoku.proper())
-            curSudoku = curSudoku.new_sudoku_fewer_givens(1)
-        f.write(results)
+
+def gatherDataFromSudoku(nSudokus = 100):
+    # f = open('sudokuData'+str(time.time())+'.csv', 'a')
+    difficultyProperCount = [[0,0],[0,0],[0,0],[0,0]]
+    while True:
+        sudokus = generate_sudokus(nSudokus)
+        sudokuCounter = 0
+        for sudoku in sudokus:
+            sudokuCounter+=1
+            print sudokuCounter
+            lesserSudokus = sudoku.new_sudoku_all_fewer_givens()
+            proper = 0
+            for lesser in lesserSudokus:
+                if lesser.proper():
+                    proper += 1
+            difficultyProperCount[difficultyDict[sudoku.difficulty]-1][1]+=proper
+            difficultyProperCount[difficultyDict[sudoku.difficulty]-1][0]+=1
+            print difficultyProperCount
+        break
+    print difficultyProperCount
+
+baseClauses = sudoku_clauses()
+
+gatherDataFromSudoku(1000)
 
 
 
